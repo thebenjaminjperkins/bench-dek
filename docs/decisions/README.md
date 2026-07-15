@@ -13,3 +13,4 @@ Current decisions:
 
 - [0001-layered-host-architecture](0001-layered-host-architecture.md)
 - [0002-capability-first-module-contract](0002-capability-first-module-contract.md)
+- [0003-v1-module-transport](0003-v1-module-transport.md)
