@@ -12,5 +12,6 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=d:\\ESP Project\\DeK\\build"
-  ]
+  ],
+  "idf.flashType": "UART"
 }
