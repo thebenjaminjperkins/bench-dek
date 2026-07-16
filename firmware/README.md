@@ -5,9 +5,9 @@ the current temporary test program.
 
 ## Layout
 
-- `main.c` is a temporary test entrypoint.
+- `main.c` is the thin ESP-IDF entrypoint that hands off to host startup.
 - `host/` contains host-side production architecture layers.
 - `modules/` contains module-side source and protocol-facing module logic.
 
-As real implementation replaces the test entrypoint, code should move into the
-layered directories below instead of accumulating in `main.c`.
+Host-specific runtime code should live under `host/` rather than accumulating in
+`main.c`.

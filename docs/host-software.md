@@ -80,6 +80,8 @@ The intended host bootstrap order is:
 
 ## Recommended Source Layout
 
+- `firmware/host/app_main.c`
+- `firmware/host/core/`
 - `firmware/host/ui/`
 - `firmware/host/applications/`
 - `firmware/host/service-api/`

@@ -2,6 +2,8 @@
 
 The host firmware is split by responsibility:
 
+- `app_main.c` for host startup and top-level task bring-up
+- `core/` for host-wide runtime plumbing such as system bootstrap, events, and config
 - `ui/` for presentation and input handling
 - `applications/` for user-facing tool workflows
 - `service-api/` for app-facing capability contracts
