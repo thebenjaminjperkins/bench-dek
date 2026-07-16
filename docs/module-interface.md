@@ -1,23 +1,252 @@
 # Module Interface
 
-This document defines the architectural shape of the contract between the host
-and modules. It does not yet lock in a final wire format, but it establishes the
-required concepts that any protocol must support.
+This document defines the v1 host-to-module interface for DeK. It covers the
+standard transport, wire-level packet rules, enumeration flow, and the boundary
+between shared control messages and capability-specific payloads.
+
+The intent is to standardize how the host talks to modules without forcing all
+modules to share the same internal implementation.
+
+## Scope
+
+This document defines:
+
+- The required v1 transport
+- Required signals between host and module
+- Packet framing and sequencing
+- Module enumeration and descriptor exchange
+- Capability discovery and session management
+- Error handling and timeout expectations
+
+This document does not define:
+
+- The final connector or physical pinout
+- Individual capability payload schemas
+- UI or application behavior
+- Module-internal firmware structure
+
+## Transport
+
+DeK v1 uses SPI as the required host-to-module transport.
+
+Rules:
+
+- The host is always the SPI master.
+- A module is always an SPI slave.
+- The host controls transaction timing and clocks all data.
+- Modules must not assume they can transmit spontaneously without host clocks.
+
+Initial SPI operating assumptions for v1:
+
+- 4-wire SPI
+- 8-bit words
+- MSB first
+- SPI mode 0
+- Enumeration starts at a conservative clock rate, such as 1 MHz
+- Higher clock rates may be used after enumeration if both sides support them
+
+## Required Signals
+
+Each module connection must provide:
+
+- `SCLK`
+- `MOSI`
+- `MISO`
+- `CS`
+- `ATTN` from module to host
+- `RESET` from host to module
+- `GND`
+- power
+
+Optional but recommended:
+
+- `PRESENT` from module or connector detect logic to host
+
+## Signal Semantics
+
+### `CS`
+
+`CS` selects the target module for an SPI transaction. A transaction is scoped to
+exactly one module.
+
+### `ATTN`
+
+`ATTN` means the module has something pending for the host.
+
+Examples:
+
+- A deferred command response is ready
+- Stream data is available
+- An asynchronous event occurred
+- A fault or status change needs to be reported
+
+Rules:
+
+- The module asserts `ATTN` when one or more outbound packets are queued.
+- The host responds by initiating one or more SPI transactions to drain them.
+- The module deasserts `ATTN` only when no host-visible packets remain pending.
+- `ATTN` is a level signal, not a pulse contract.
+
+### `RESET`
+
+`RESET` lets the host force a module into a known boot state.
+
+Rules:
+
+- The host may assert `RESET` during recovery or startup.
+- A reset module must discard open sessions and pending responses.
+- After reset, the module returns to the `Detected` or boot state and must be
+  enumerated again.
+
+### `PRESENT`
+
+`PRESENT` is optional and indicates physical presence. If unavailable, the host
+may infer module presence through connector design or SPI enumeration behavior.
+
+## Link Model
+
+DeK uses a packet-oriented link protocol on top of SPI.
+
+Rules:
+
+- Each packet is self-delimiting and integrity-protected.
+- Control traffic and capability traffic use the same packet envelope.
+- Channel `0` is reserved for control-plane messages.
+- Non-zero channels represent opened capability sessions.
+
+The SPI bus is the byte pipe. The DeK packet protocol defines the meaning of the
+bytes.
+
+## Packet Format
+
+Each packet has this structure:
+
+1. Fixed header
+2. Variable payload
+3. CRC trailer
+
+### Header
+
+The v1 header is 12 bytes:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 2 | Magic `0x44 0x4B` (`DK`) |
+| 2 | 1 | Protocol version |
+| 3 | 1 | Message type |
+| 4 | 1 | Flags |
+| 5 | 1 | Header length, currently `12` |
+| 6 | 2 | Sequence number |
+| 8 | 2 | Channel ID |
+| 10 | 2 | Payload length |
+
+### Payload
+
+The payload format depends on message type and channel.
+
+- On channel `0`, the payload uses DeK control message schemas.
+- On non-zero channels, the payload uses the schema defined by the opened
+  capability session.
+
+### Trailer
+
+The trailer is:
+
+| Size | Field |
+| --- | --- |
+| 2 | CRC16-CCITT over header and payload |
+
+## Message Types
+
+The shared v1 message types are:
+
+- `HELLO`
+- `HELLO_ACK`
+- `GET_DESCRIPTOR`
+- `DESCRIPTOR`
+- `GET_CAPABILITIES`
+- `CAPABILITIES`
+- `OPEN_CAPABILITY`
+- `OPEN_ACK`
+- `CLOSE_CAPABILITY`
+- `CLOSE_ACK`
+- `COMMAND`
+- `RESPONSE`
+- `STREAM_DATA`
+- `EVENT`
+- `PING`
+- `PONG`
+- `ERROR`
+- `POLL`
+- `EMPTY`
+
+Modules may not invent alternate control-plane semantics. Capability-specific
+behavior belongs inside capability payloads, not in transport rules.
+
+## Flags
+
+The `Flags` byte is reserved for transport-wide behavior.
+
+Initial v1 flags:
+
+- `0x01`: response required
+- `0x02`: more packets pending after this one
+- `0x04`: error packet
+- `0x08`: stream packet
+
+Unassigned flags must be sent as zero and ignored when unknown unless a future
+protocol version defines otherwise.
+
+## Sequence Numbers
+
+Sequence numbers are host-assigned for host-originated requests.
+
+Rules:
+
+- The host increments the sequence number for each new request packet.
+- A module response must echo the matching sequence number.
+- Asynchronous module-originated packets such as events or stream data use the
+  most relevant associated session and may use module-managed sequencing within
+  the payload if the capability requires it.
+- Sequence numbers are 16-bit and may wrap.
+
+## Channel Model
+
+Channel `0` is the control channel and is always available.
+
+Non-zero channels represent capability sessions created by `OPEN_CAPABILITY`.
+
+Rules:
+
+- The host opens a capability before sending capability-specific `COMMAND`
+  packets.
+- The module returns a channel ID in `OPEN_ACK`.
+- The channel remains valid until `CLOSE_CAPABILITY`, module reset, transport
+  fault, or module removal.
+- Channel IDs are scoped to a single module instance and are not stable across
+  resets.
+
+This prevents capability traffic from being confused with enumeration and base
+management traffic.
 
 ## Module Descriptor
 
-Each module must provide a descriptor during enumeration that includes:
+Each module must return a descriptor on the control channel when the host sends
+`GET_DESCRIPTOR`.
+
+The descriptor must include:
 
 - Stable module identifier
 - Module family or product identifier
 - Hardware revision
 - Firmware revision
 - Supported protocol version
-- Capability manifest
+- Maximum supported packet payload
+- Capability manifest length or pagination info
 - Health or fault flags
 
-If the descriptor is malformed or incompatible, the host must quarantine the
-module rather than exposing partial capability state to applications.
+If the descriptor is malformed, inconsistent, or incompatible, the host must
+quarantine the module rather than partially registering it.
 
 ## Capability Manifest
 
@@ -34,17 +263,126 @@ Each advertised capability must include:
 The host binds applications to these capabilities rather than to module-specific
 commands.
 
-## Required Protocol Behaviors
+If the manifest is too large for a single packet, `GET_CAPABILITIES` and
+`CAPABILITIES` support pagination through payload parameters.
 
-Whatever wire protocol we adopt must support:
+## Enumeration Flow
 
-- Module enumeration
-- Command/response exchanges
-- Streaming data delivery
-- Request correlation
-- Transport integrity checks
-- Timeouts and retry boundaries
-- Fault and disconnect reporting
+The v1 enumeration sequence is:
+
+1. Host detects a module through `PRESENT`, fixed slot knowledge, or transport probing.
+2. Host asserts then releases `RESET` if needed to establish a clean state.
+3. Host selects a safe initial SPI clock.
+4. Host sends `HELLO` on control channel `0`.
+5. Module replies with `HELLO_ACK`, including supported protocol version.
+6. Host sends `GET_DESCRIPTOR`.
+7. Module returns `DESCRIPTOR`.
+8. Host sends one or more `GET_CAPABILITIES` requests.
+9. Module returns one or more `CAPABILITIES` packets.
+10. Host validates compatibility and marks the module `Ready`.
+
+Enumeration fails if:
+
+- Protocol version is unsupported
+- Descriptor integrity fails
+- Required fields are missing
+- Capability data is malformed
+
+## SPI Transaction Behavior
+
+SPI is full-duplex electrically, but DeK treats it as a packet transport with
+host-driven polling.
+
+Normal patterns:
+
+- Host sends a request and receives an immediate response in the same
+  transaction if the module is ready.
+- Host sends a request and receives an `EMPTY`, `ERROR`, or a short immediate
+  acknowledgment if the full response is deferred.
+- Module later asserts `ATTN`.
+- Host issues `POLL` or another planned transfer to fetch the queued packet.
+
+This model avoids requiring a module to complete every request synchronously
+while preserving host ownership of clocks and scheduling.
+
+## `POLL` and `EMPTY`
+
+`POLL` is a host packet used to fetch pending module traffic when the host has no
+new command to send.
+
+`EMPTY` means:
+
+- the module has no packet ready for the host, or
+- the requested packet is not ready yet
+
+`EMPTY` is not an error by itself.
+
+## Streaming and Events
+
+Stream data and asynchronous events use the same packet envelope as control
+traffic.
+
+Rules:
+
+- Stream data is tied to an open capability channel.
+- The module asserts `ATTN` when stream packets are pending.
+- The host drains pending packets at a rate appropriate for the capability.
+- Capability definitions may add payload-level sample counters, timestamps, or
+  drop indicators.
+
+This keeps streaming within the same transport model rather than introducing a
+separate side channel.
+
+## Error Handling
+
+Error reporting uses the shared `ERROR` message type on either the control
+channel or a capability channel.
+
+An error payload must include:
+
+- Error class
+- Error code
+- Related sequence number, if any
+- Related channel, if any
+
+Transport-visible error classes should include:
+
+- malformed packet
+- unsupported protocol version
+- unsupported message type
+- invalid channel
+- busy
+- timeout
+- internal module fault
+
+Applications should see normalized capability failures from the host rather than
+raw transport failures whenever possible.
+
+## Timeouts and Retries
+
+The host owns retry policy.
+
+Baseline v1 expectations:
+
+- A valid packet must always return either a valid response packet or a valid
+  `ERROR` or `EMPTY` packet.
+- The host should use a short link timeout for an SPI transaction.
+- The host should use a longer logical timeout for deferred command completion.
+- Only the host retries requests.
+- A module must treat duplicate requests with the same live sequence number
+  carefully enough to avoid corrupting state.
+
+Capability contracts may define longer operation times, but the transport rules
+remain host-driven.
+
+## Compatibility Rules
+
+- Protocol version mismatches are handled during `HELLO`.
+- Capability version mismatches are handled when registering providers.
+- Backward-compatible additions are preferred over breaking control message
+  changes.
+- Modules may evolve internally without affecting apps if the capability
+  contract remains stable.
 
 ## Ownership Rules
 
@@ -52,21 +390,18 @@ Whatever wire protocol we adopt must support:
 - The module owns the physical hardware it exposes.
 - Drivers own translation between host requests and module commands.
 - Applications do not talk to modules directly.
+- The transport layer owns framing, CRC validation, sequence matching, and
+  timeout behavior.
 
-## Compatibility Rules
+## Design Notes
 
-- Protocol version mismatches are handled at enumeration time.
-- Capability version mismatches are handled when registering providers.
-- Backward-compatible additions are preferred over breaking capability changes.
-- Modules may evolve internally without affecting apps if the capability
-  contract remains stable.
+This v1 spec intentionally standardizes the host-facing link even though modules
+may use different microcontrollers or internal designs.
 
-## Future Work
+That means:
 
-This document should later be expanded with:
+- one module may be ESP32-S3-based
+- another may be RP2350-based
+- both still enumerate and communicate through the same DeK SPI packet contract
 
-- Concrete message envelopes
-- Error codes
-- Capability naming conventions
-- Reservation semantics
-- Streaming flow-control behavior
+This is the main mechanism that keeps the architecture module-agnostic.

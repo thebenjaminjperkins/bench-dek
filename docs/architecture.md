@@ -31,6 +31,22 @@ Responsibilities:
 - Translate user actions into application commands.
 - Show degraded or unavailable capability states clearly.
 
+#### UI Interaction Model
+
+DeK uses a task-focused UI rather than a desktop-style window manager.
+
+Rules:
+- The UI focuses on one primary tool or workflow at a time.
+- Secondary information may appear in lightweight panels, overlays, or status areas.
+- Background tasks may continue running when the user is focused on another tool.
+- The UI may surface background activity through status, alerts, progress, or notifications without requiring a full context switch.
+- Applications should describe what needs to be shown, while the UI decides how to present it on the available display.
+
+Implications:
+- The system does not require overlapping windows, free-form window placement, or a general desktop metaphor.
+- Navigation should favor clear transitions between task contexts rather than concurrent multi-window management.
+- The same application should be able to render on different UI front ends, such as a temporary remote display, a local integrated display, or another future presentation surface, without changing application logic.
+
 ### 2. Applications
 
 Applications are the user-facing tools that run on the DeK, such as a UART terminal,
