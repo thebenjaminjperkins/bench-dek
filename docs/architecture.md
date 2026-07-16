@@ -53,15 +53,17 @@ Applications are the user-facing tools that run on the DeK, such as a UART termi
 logic analyzer, bus sniffer, or GPIO monitor.
 
 Applications:
-- Request capabilities from the service API.
+- Request capabilities from the service API and activate capability-backed services when needed.
 - Interpret returned data and transform it into app-specific behavior.
 - Manage app workflow, recording, decoding, and presentation rules.
 - Remain agnostic to which module provides a capability.
 
 Example:
 A UART terminal asks for a `uart.stream` capability. It does not need to know which
-module owns the UART peripheral or which physical pins are in use. It binds to the
-capability contract exposed by the host.
+module owns the UART peripheral or which physical pins are in use. The host may
+return a handle to a configured UART service instance that exposes one or more data
+streams. The app binds to the capability contract exposed by the host rather than to
+the module directly.
 
 ### 3. Service API
 
@@ -71,6 +73,7 @@ capabilities.
 
 The service API supports three interaction styles:
 - Command/response for control operations.
+- Service lifecycle operations to activate, observe, and stop capability service instances.
 - Subscription streams for continuous data.
 - Reservations for exclusive or timing-sensitive resources.
 
@@ -154,6 +157,47 @@ Each capability must define:
 The module manager matches apps to capabilities, not to modules directly. A single
 module may expose many capabilities, and multiple modules may expose the same one.
 
+### Capability Command Model
+
+Capability commands are part of a capability contract, not part of one global
+system-wide opcode table.
+
+That means:
+- The DeK control plane is standardized across all modules.
+- Capability-specific command IDs and payload schemas are scoped to a capability
+  ID and version.
+- Two unrelated capabilities may reuse the same numeric command value without
+  conflict because the active capability contract gives the command its meaning.
+
+For example, `spi.capture` may define a command that means "start capture" within
+`spi.capture v1`. That does not require the same numeric value to have any meaning
+inside `uart.stream`, `gpio.digital`, or another capability.
+
+This keeps capability contracts versionable and reusable without forcing all
+modules into one global command registry.
+
+## Capability Services and Streams
+
+To keep the runtime model clear, DeK distinguishes between a capability definition
+and a capability service instance.
+
+- A capability is the stable, versioned contract that applications target.
+- A capability service instance is a runtime activation of that capability with a
+  concrete provider, configuration, and lifecycle.
+- A stream is a live flow of data exposed by a running capability service instance.
+
+A capability service instance may define:
+- A service instance identifier.
+- The bound capability ID and version.
+- The selected module provider.
+- Active configuration, such as channel count, sample rate, or protocol mode.
+- Lifecycle state, such as starting, running, stopping, degraded, or faulted.
+- Subscriber list or lease owner.
+- One or more live streams.
+
+This model allows the host to keep capabilities stable for applications while still
+tracking runtime realities such as sharing, exclusivity, health, and fan-out.
+
 ## Resource Ownership and Arbitration
 
 Contention is inevitable, so the architecture defines ownership rules up front.
@@ -161,9 +205,11 @@ Contention is inevitable, so the architecture defines ownership rules up front.
 Rules:
 - Physical hardware is owned by the providing module.
 - Capability routing is owned by the module manager.
+- Capability service instance lifecycle is owned by the service API and module manager.
 - Presentation and workflow are owned by the application.
 - Exclusive capabilities require a lease before activation.
-- Shareable capabilities may have multiple subscribers if the module declares support.
+- Shareable capabilities may allow multiple subscribers on one compatible service
+  instance if the module declares support.
 
 If multiple modules provide the same capability, provider selection follows this order:
 1. Existing user-selected preference.
@@ -213,11 +259,15 @@ The normal flow is:
 
 1. The user interacts with the UI.
 2. The application decides which capability it needs.
-3. The application requests the capability through the service API.
-4. The module manager selects a provider and allocates any required lease.
+3. The application requests the capability through the service API and provides any
+   required configuration.
+4. The module manager selects a provider and either reuses a compatible running
+   service instance or allocates a new lease and creates one.
 5. The module driver translates the request into module-specific commands.
 6. The communication layer exchanges packets with the module.
-7. The response is normalized back up the stack and rendered by the application.
+7. The host returns a service handle and any exposed streams to the application.
+8. Stream data and control responses are normalized back up the stack and rendered by
+   the application.
 
 This keeps hardware, policy, and presentation responsibilities cleanly separated.
 
@@ -237,7 +287,7 @@ Violating these boundaries will create tight coupling and make modules harder to
 
 The UI captures intent and displays results.
 Applications express user workflows in terms of capabilities.
-The service API provides a stable contract for apps.
+The service API provides a stable contract for apps and manages runtime service instances.
 The module manager discovers modules, arbitrates access, and routes requests.
 Module drivers translate normalized requests to module-specific behavior.
 The communication layer moves validated messages across the physical link.

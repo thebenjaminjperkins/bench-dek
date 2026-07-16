@@ -26,7 +26,8 @@ identifiers, transport details, or driver-specific concepts.
 
 Applications define workflows in terms of capabilities. They may subscribe to
 streams, issue commands, or request resource reservations through the service
-API.
+API. When activation is required, the service API may return a handle to a runtime
+capability service instance rather than exposing a module directly.
 
 ### Service API
 
@@ -35,6 +36,8 @@ eventually define:
 
 - Capability discovery queries
 - Capability configuration requests
+- Capability activation and stop operations
+- Capability service instance queries and lifecycle reporting
 - Stream subscription management
 - Lease and reservation operations
 - Error and health reporting
@@ -46,6 +49,7 @@ The module manager owns:
 - Module discovery
 - Capability registration
 - Provider selection
+- Capability service instance reuse and compatibility decisions
 - Lease enforcement
 - Lifecycle state transitions
 - Health monitoring at the policy level

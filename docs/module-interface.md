@@ -21,7 +21,7 @@ This document defines:
 This document does not define:
 
 - The final connector or physical pinout
-- Individual capability payload schemas
+- Individual capability payload schemas beyond the boundary rules that scope them
 - UI or application behavior
 - Module-internal firmware structure
 
@@ -183,6 +183,31 @@ The shared v1 message types are:
 Modules may not invent alternate control-plane semantics. Capability-specific
 behavior belongs inside capability payloads, not in transport rules.
 
+## Command Scoping
+
+DeK v1 intentionally separates global transport semantics from capability-local
+command semantics.
+
+Rules:
+
+- Control-plane message types are global and standardized for every module.
+- Capability-specific commands are defined by the opened capability contract,
+  not by one system-wide opcode table.
+- The meaning of a capability command depends on capability ID, capability
+  version, and session context.
+- Numeric command values may be reused by different capabilities without
+  conflict when their contracts are different.
+
+Example:
+
+- A command value used inside `spi.capture v1` may mean "start capture".
+- The same numeric value may mean something else inside `uart.stream v1`.
+- Neither reuse changes the meaning of the shared control-plane messages such as
+  `OPEN_CAPABILITY`, `COMMAND`, `STREAM_DATA`, or `ERROR`.
+
+This keeps the host/module protocol stable while allowing capability contracts to
+evolve independently.
+
 ## Flags
 
 The `Flags` byte is reserved for transport-wide behavior.
@@ -265,6 +290,10 @@ commands.
 
 If the manifest is too large for a single packet, `GET_CAPABILITIES` and
 `CAPABILITIES` support pagination through payload parameters.
+
+Capability manifests describe the command surface for a specific capability
+contract. They do not imply that command IDs are globally reserved across all
+other capabilities in the system.
 
 ## Enumeration Flow
 
