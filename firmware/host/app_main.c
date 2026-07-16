@@ -1,65 +1,129 @@
+#include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
 
-#include "driver/temperature_sensor.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/queue.h"
-#include "freertos/task.h"
+#include "transport/dek_packet.h"
 
-static temperature_sensor_handle_t tsens;
-static QueueHandle_t temperature_queue;
-
-static void heartbeat_task(void *pv_parameter)
+static bool expect_true(const char *label, bool condition)
 {
-    (void)pv_parameter;
-
-    while (1) {
-        printf("Heartbeat\n");
-        vTaskDelay(pdMS_TO_TICKS(3000));
+    if (!condition) {
+        printf("FAIL: %s\n", label);
+        return false;
     }
+
+    printf("PASS: %s\n", label);
+    return true;
 }
 
-static void temperature_task(void *pv_parameter)
+static bool expect_u8(const char *label, uint8_t actual, uint8_t expected)
 {
-    (void)pv_parameter;
-
-    while (1) {
-        float temperature;
-        ESP_ERROR_CHECK(temperature_sensor_get_celsius(tsens, &temperature));
-        xQueueSend(temperature_queue, &temperature, portMAX_DELAY);
-        vTaskDelay(pdMS_TO_TICKS(1000));
+    if (actual != expected) {
+        printf("FAIL: %s (expected=%u actual=%u)\n", label, expected, actual);
+        return false;
     }
+
+    printf("PASS: %s\n", label);
+    return true;
 }
 
-static void display_task(void *pv_parameter)
+static bool expect_u16(const char *label, uint16_t actual, uint16_t expected)
 {
-    (void)pv_parameter;
-
-    while (1) {
-        float temp_out;
-
-        if (xQueueReceive(temperature_queue, &temp_out, portMAX_DELAY)) {
-            printf("Current temperature: %.2f Celsius\n", temp_out);
-            printf("Current temperature: %.2f Fahrenheit\n", (temp_out * 9.0f / 5.0f) + 32.0f);
-        }
+    if (actual != expected) {
+        printf("FAIL: %s (expected=%u actual=%u)\n", label, expected, actual);
+        return false;
     }
+
+    printf("PASS: %s\n", label);
+    return true;
+}
+
+static bool test_init_defaults(void)
+{
+    dek_packet_header_t header;
+
+    memset(&header, 0xA5, sizeof(header));
+    dek_packet_init(&header);
+
+    return expect_u8("init magic[0]", header.magic[0], DEK_PACKET_MAGIC_BYTE0) &&
+        expect_u8("init magic[1]", header.magic[1], DEK_PACKET_MAGIC_BYTE1) &&
+        expect_u8("init protocol version", header.protocol_version, DEK_PACKET_VERSION_V1) &&
+        expect_u8("init message type", header.message_type, 0) &&
+        expect_u8("init flags", header.flags, 0) &&
+        expect_u8("init header length", header.header_length, DEK_PACKET_HEADER_SIZE) &&
+        expect_u16("init sequence number", header.sequence_number, 0) &&
+        expect_u16("init channel id", header.channel_id, 0) &&
+        expect_u16("init payload length", header.payload_length, 0);
+}
+
+static bool test_encode_decode_round_trip(void)
+{
+    dek_packet_header_t source_header;
+    dek_packet_header_t decoded_header;
+    uint8_t buffer[DEK_PACKET_HEADER_SIZE];
+
+    dek_packet_init(&source_header);
+    source_header.message_type = 0x07;
+    source_header.flags = 0x09;
+    source_header.sequence_number = 0x1234;
+    source_header.channel_id = 0x0042;
+    source_header.payload_length = 0x0020;
+
+    memset(&decoded_header, 0, sizeof(decoded_header));
+    memset(buffer, 0, sizeof(buffer));
+
+    if (!expect_true(
+            "encode header succeeds",
+            dek_packet_encode_header(&source_header, buffer, sizeof(buffer)))) {
+        return false;
+    }
+
+    if (!expect_true(
+            "decode header succeeds",
+            dek_packet_decode_header(&decoded_header, buffer, sizeof(buffer)))) {
+        return false;
+    }
+
+    return expect_u8("decode magic[0]", decoded_header.magic[0], source_header.magic[0]) &&
+        expect_u8("decode magic[1]", decoded_header.magic[1], source_header.magic[1]) &&
+        expect_u8("decode protocol version", decoded_header.protocol_version, source_header.protocol_version) &&
+        expect_u8("decode message type", decoded_header.message_type, source_header.message_type) &&
+        expect_u8("decode flags", decoded_header.flags, source_header.flags) &&
+        expect_u8("decode header length", decoded_header.header_length, source_header.header_length) &&
+        expect_u16("decode sequence number", decoded_header.sequence_number, source_header.sequence_number) &&
+        expect_u16("decode channel id", decoded_header.channel_id, source_header.channel_id) &&
+        expect_u16("decode payload length", decoded_header.payload_length, source_header.payload_length);
+}
+
+static bool test_invalid_decode_rejected(void)
+{
+    dek_packet_header_t header;
+    uint8_t buffer[DEK_PACKET_HEADER_SIZE];
+
+    memset(&header, 0, sizeof(header));
+    memset(buffer, 0, sizeof(buffer));
+
+    buffer[DEK_PACKET_OFFSET_MAGIC] = 0x00;
+    buffer[DEK_PACKET_OFFSET_MAGIC + 1] = 0x00;
+
+    return expect_true(
+        "decode rejects invalid magic",
+        !dek_packet_decode_header(&header, buffer, sizeof(buffer)));
 }
 
 void dek_host_app_main(void)
 {
-    temperature_sensor_config_t tsens_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(20, 80);
+    bool all_passed;
 
-    ESP_ERROR_CHECK(temperature_sensor_install(&tsens_config, &tsens));
-    ESP_ERROR_CHECK(temperature_sensor_enable(tsens));
+    printf("Running dek_packet unit tests...\n");
 
-    temperature_queue = xQueueCreate(10, sizeof(float));
+    all_passed = test_init_defaults() &&
+        test_encode_decode_round_trip() &&
+        test_invalid_decode_rejected();
 
-    printf("Powering up...\n");
-    xTaskCreate(temperature_task, "Temperature", 4096, NULL, 1, NULL);
-    printf("Temperature task created.\n");
+    if (all_passed) {
+        printf("dek_packet unit tests passed.\n");
+        return;
+    }
 
-    xTaskCreate(heartbeat_task, "Heartbeat", 2048, NULL, 1, NULL);
-    printf("Heartbeat task created.\n");
-
-    xTaskCreate(display_task, "Display", 2048, NULL, 1, NULL);
-    printf("Display task created.\n");
+    printf("dek_packet unit tests failed.\n");
 }
