@@ -5,6 +5,9 @@
 The short-term goal is to replace the architecture-only phase with one real,
 end-to-end vertical slice built around the `uart.stream` capability.
 
+For the file-by-file execution plan for this phase, see
+[UART Vertical Slice Sub-Roadmap](uart-vertical-slice-roadmap.md).
+
 At the end of this phase, DeK should be able to:
 
 1. Boot through a host-oriented entrypoint instead of the current test program.
