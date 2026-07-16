@@ -1,4 +1,5 @@
 # DeK
+Your embedded systems companion
 
 DeK is a modular embedded tool platform built around a host and hot-pluggable
 modules. The host provides the user experience, application runtime, capability
