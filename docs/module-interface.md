@@ -148,6 +148,9 @@ The payload format depends on message type and channel.
 - On non-zero channels, the payload uses the schema defined by the opened
   capability session.
 
+Unless a payload definition says otherwise, all multibyte integer fields in DeK
+v1 payloads are little-endian.
+
 ### Trailer
 
 The trailer is:
@@ -180,13 +183,11 @@ The shared v1 message types are:
 - `POLL`
 - `EMPTY`
 
-Modules may not invent alternate control-plane semantics. Capability-specific
-behavior belongs inside capability payloads, not in transport rules.
+Modules may not invent alternate control-plane semantics. Capability-specific behavior belongs inside capability payloads, not in transport rules.
 
 ## Command Scoping
 
-DeK v1 intentionally separates global transport semantics from capability-local
-command semantics.
+DeK v1 intentionally separates global transport semantics from capability-local command semantics.
 
 Rules:
 
@@ -294,6 +295,237 @@ If the manifest is too large for a single packet, `GET_CAPABILITIES` and
 Capability manifests describe the command surface for a specific capability
 contract. They do not imply that command IDs are globally reserved across all
 other capabilities in the system.
+
+## Minimal Control Payload Definitions for the First Vertical Slice
+
+The v1 transport document remains capability-agnostic, but the first DeK
+vertical slice needs concrete control-plane payloads so host and module code can
+be implemented consistently.
+
+These payloads are the baseline definitions for enumeration and session setup in
+v1.
+
+### Common Encoding Rules
+
+- Multibyte integers are little-endian.
+- Fixed-width numeric fields are preferred over text when a value is strictly
+  machine-readable.
+- Capability IDs are encoded as ASCII with a leading byte length.
+- Reserved fields must be sent as zero and ignored on receipt in v1.
+
+### `HELLO`
+
+`HELLO` is sent by the host on channel `0`.
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 1 | `min_protocol_version` |
+| 1 | 1 | `max_protocol_version` |
+| 2 | 2 | `host_flags` |
+
+Rules:
+
+- `host_flags` must be zero in v1.
+- The host should normally send `1` and `1` for min and max protocol version
+  during the first slice.
+
+### `HELLO_ACK`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 1 | `selected_protocol_version` |
+| 1 | 1 | `module_flags` |
+| 2 | 2 | `reserved` |
+
+Rules:
+
+- `module_flags` must be zero in v1 unless a future document defines bits.
+- If no compatible protocol version exists, the module should reply with
+  `ERROR` instead of `HELLO_ACK`.
+
+### `GET_DESCRIPTOR`
+
+Payload: none
+
+### `DESCRIPTOR`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 16 | `module_id` |
+| 16 | 2 | `module_family_id` |
+| 18 | 2 | `module_model_id` |
+| 20 | 1 | `hardware_rev_major` |
+| 21 | 1 | `hardware_rev_minor` |
+| 22 | 1 | `firmware_rev_major` |
+| 23 | 1 | `firmware_rev_minor` |
+| 24 | 1 | `firmware_rev_patch` |
+| 25 | 1 | `supported_protocol_version` |
+| 26 | 2 | `max_payload_size` |
+| 28 | 2 | `capability_manifest_total_bytes` |
+| 30 | 1 | `capability_count` |
+| 31 | 1 | `health_flags` |
+
+Rules:
+
+- `module_id` is a stable 16-byte identifier, not a human-readable string.
+- `max_payload_size` is the maximum payload length the module accepts inside one
+  packet, not the total packet size.
+- `health_flags` is a bitfield and may be zero when healthy.
+
+### `GET_CAPABILITIES`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 2 | `manifest_offset` |
+| 2 | 2 | `requested_length` |
+
+Rules:
+
+- `manifest_offset` is a byte offset into the serialized manifest.
+- `requested_length` is the maximum chunk length the host wants returned.
+
+### `CAPABILITIES`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 2 | `manifest_total_bytes` |
+| 2 | 2 | `chunk_offset` |
+| 4 | 2 | `chunk_length` |
+| 6 | N | `chunk_bytes` |
+
+Rules:
+
+- The host reconstructs the manifest by offset.
+- `chunk_length` must match the size of `chunk_bytes`.
+
+### Manifest Entry Encoding
+
+Each capability manifest entry uses this structure inside `chunk_bytes`:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 1 | `capability_id_length` |
+| 1 | N | `capability_id_ascii` |
+| N+1 | 2 | `capability_version` |
+| N+3 | 1 | `resource_policy` |
+| N+4 | 1 | `command_count` |
+| N+5 | 1 | `event_count` |
+| N+6 | 2 | `capability_flags` |
+| N+8 | 2 | `limits_blob_length` |
+| N+10 | M | `limits_blob` |
+
+`resource_policy` values:
+
+- `0=shared`
+- `1=exclusive`
+- `2=reservable`
+
+Design choice:
+
+- Capability IDs stay human-readable in the manifest and open request.
+
+Why:
+
+- It makes bring-up, logs, and future tooling much easier.
+
+### `OPEN_CAPABILITY`
+
+`OPEN_CAPABILITY` is sent on channel `0`.
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 1 | `capability_id_length` |
+| 1 | N | `capability_id_ascii` |
+| N+1 | 2 | `capability_version` |
+| N+3 | 2 | `open_flags` |
+| N+5 | 2 | `config_length` |
+| N+7 | M | `config_blob` |
+
+Rules:
+
+- `open_flags` must be zero in v1.
+- `config_blob` uses the capability-specific config format for the requested
+  capability.
+- For the first slice, `config_blob` for `uart.stream v1` is defined in
+  `docs/capabilities/uart-stream.md`.
+
+### `OPEN_ACK`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 2 | `channel_id` |
+| 2 | 2 | `service_flags` |
+| 4 | 2 | `accepted_config_length` |
+| 6 | N | `accepted_config_blob` |
+
+Rules:
+
+- `channel_id` must be non-zero on success.
+- If the module cannot open the capability, it should send `ERROR` instead of
+  `OPEN_ACK`.
+- `accepted_config_blob` may echo the requested config or a normalized accepted
+  config if the contract allows negotiation.
+
+Design choice for the first slice:
+
+- `uart.stream v1` should echo the accepted config unchanged when the request is
+  valid.
+
+Why:
+
+- It avoids hidden negotiation during bring-up.
+
+### `CLOSE_CAPABILITY`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 2 | `target_channel_id` |
+| 2 | 2 | `reserved` |
+
+### `CLOSE_ACK`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 2 | `target_channel_id` |
+| 2 | 2 | `reserved` |
+
+### `ERROR`
+
+Payload:
+
+| Offset | Size | Field |
+| --- | --- | --- |
+| 0 | 1 | `error_class` |
+| 1 | 1 | `error_code` |
+| 2 | 2 | `related_sequence` |
+| 4 | 2 | `related_channel` |
+| 6 | 1 | `detail_length` |
+| 7 | N | `detail_bytes` |
+
+Rules:
+
+- `detail_bytes` may be empty.
+- `related_sequence` should be zero if no specific request is implicated.
+- `related_channel` should be zero for control-plane failures that are not tied
+  to an opened session.
 
 ## Enumeration Flow
 
