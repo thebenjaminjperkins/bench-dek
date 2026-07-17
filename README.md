@@ -1,6 +1,6 @@
 # DeK
 
-DeK is a modular embedded tool platform built around a host and hot-pluggable
+DeK is an extensible embedded tool platform built around a host and hot-pluggable
 modules. The host provides the user experience, application runtime, capability
 routing, and system policy. Modules provide hardware-backed services such as
 UART, GPIO, protocol analysis, and other instrumentation features.
