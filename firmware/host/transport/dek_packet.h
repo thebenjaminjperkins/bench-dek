@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <string.h>
 
 #define DEK_PACKET_MAGIC_BYTE0     0x44
 #define DEK_PACKET_MAGIC_BYTE1     0x4B
@@ -19,6 +20,9 @@
 #define DEK_PACKET_OFFSET_SEQUENCE_NUMBER   6
 #define DEK_PACKET_OFFSET_CHANNEL_ID        8
 #define DEK_PACKET_OFFSET_PAYLOAD_LENGTH    10
+#define DEK_PACKET_CRC_SIZE                 2
+#define DEK_PACKET_OVERHEAD \
+    (DEK_PACKET_HEADER_SIZE + DEK_PACKET_CRC_SIZE)
 
 typedef struct
 {
@@ -35,6 +39,12 @@ typedef struct
 
 } dek_packet_header_t;
 
+typedef struct 
+{
+    dek_packet_header_t header;
+    const uint8_t *payload;
+} dek_packet_t;
+
 void dek_packet_init(dek_packet_header_t *header);
 
 bool dek_packet_encode_header(
@@ -44,6 +54,16 @@ bool dek_packet_encode_header(
 
 bool dek_packet_decode_header(
     dek_packet_header_t *header,
+    const uint8_t *buffer,
+    uint16_t buffer_size);
+
+bool dek_packet_encode (
+    const dek_packet_t *packet,
+    uint8_t *buffer,
+    uint16_t buffer_size);
+
+bool dek_packet_decode (
+    dek_packet_t *packet,
     const uint8_t *buffer,
     uint16_t buffer_size);
 
