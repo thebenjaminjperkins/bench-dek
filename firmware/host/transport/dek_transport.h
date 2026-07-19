@@ -54,11 +54,15 @@ bool dek_transport_send(
     const uint8_t *payload,
     uint16_t payload_length,
     uint8_t *tx_buffer,
-    uint16_t tx_buffer_size);
+    uint16_t tx_buffer_size,
+    uint16_t *encoded_length);
 
 bool dek_transport_send_hello(
     dek_transport_t *transport,
     uint8_t *tx_buffer,
-    uint16_t tx_buffer_size);
+    uint16_t tx_buffer_size,
+    uint16_t *encoded_length);
+
+bool transport_hello_self_test(void);
 
     #endif
