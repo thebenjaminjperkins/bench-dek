@@ -9,6 +9,8 @@
  * These values are part of the on-wire protocol and must remain stable.
  */
 
+ #define DEK_PROTOCOL_VERSION 1
+
 typedef enum
 {
     DEK_MSG_HELLO = 0x01,

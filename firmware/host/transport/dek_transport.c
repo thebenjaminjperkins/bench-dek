@@ -1,5 +1,5 @@
 #include "dek_transport.h"
-
+#include "messages/dek_hello.h"
 /*
  * Reset the transport state before sending any packets.
  *
@@ -56,3 +56,20 @@ bool dek_transport_send(
         tx_buffer,
         tx_buffer_size);
 }
+
+bool dek_transport_send_hello(
+    dek_transport_t *transport,
+    uint8_t *tx_buffer,
+    uint16_t tx_buffer_size) {
+        dek_hello_payload_t hello;
+        dek_hello_payload_init(&hello);
+        dek_transport_send(
+            transport,
+            DEK_MSG_HELLO,
+            0,
+            (const uint8_t *)&hello,
+            sizeof(hello),
+            tx_buffer,
+            tx_buffer_size);
+
+    }

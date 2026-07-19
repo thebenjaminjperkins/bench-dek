@@ -56,4 +56,9 @@ bool dek_transport_send(
     uint8_t *tx_buffer,
     uint16_t tx_buffer_size);
 
+bool dek_transport_send_hello(
+    dek_transport_t *transport,
+    uint8_t *tx_buffer,
+    uint16_t tx_buffer_size);
+
     #endif
