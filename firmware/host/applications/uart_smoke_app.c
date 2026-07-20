@@ -6,6 +6,7 @@
 #include "driver/uart.h"
 
 #include "uart_smoke_app.h"
+#include "dek_transport.h"
 
 #define DEK_UART_PORT      UART_NUM_0
 #define DEK_UART_TX_PIN    43
@@ -42,15 +43,25 @@ void uart_smoke_app_run(void)
         UART_PIN_NO_CHANGE,
         UART_PIN_NO_CHANGE);
 
-    const char *msg = "Hello RP2350!\r\n";
+    dek_transport_t transport;
+    dek_transport_init(&transport);
+
+    uint8_t tx_buffer[256];
+    uint16_t encoded_length;
+
 
     while (1)
     {
-        uart_write_bytes(
-            DEK_UART_PORT,
-            msg,
-            strlen(msg));
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        if (dek_transport_send_hello(
+            &transport,
+            tx_buffer,
+            sizeof(tx_buffer),
+            &encoded_length))
+        {
+            uart_write_bytes(
+                DEK_UART_PORT,
+                tx_buffer,
+                encoded_length);
+        }
     }
 }

@@ -1,0 +1,6 @@
+[submodule "external/dek-protocol"]
+	path = external/dek-protocol
+	url = git@github.com:thebenjaminjperkins/DeK-Protocol.git
+[submodule "external/DeK-Protocol"]
+	path = external/DeK-Protocol
+	url = git@github.com:thebenjaminjperkins/DeK-Protocol.git
