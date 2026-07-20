@@ -6,9 +6,11 @@ idf_component_register(
         "host/transport/dek_transport.c"
         "host/transport/dek_crc.c"
         "host/transport/messages/dek_hello.c"
+        "host/core/bootstrap.c"
+        "host/applications/uart_smoke_app.c"
     INCLUDE_DIRS
         "."
         "host"
         "host/transport"
-    REQUIRES esp_driver_tsens
+    REQUIRES esp_driver_uart
 )
