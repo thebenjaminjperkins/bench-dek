@@ -15,6 +15,8 @@ design.
 - `docs/` contains the system vision, architecture, interface contracts, and
   design decisions.
 - `firmware/` contains firmware source organized by architectural layer.
+- `external/dek-protocol/` contains the shared transport and packet library
+  used by the host and module implementations.
 - `components/` is reserved for reusable ESP-IDF components shared across the
   firmware.
 - `build/` contains generated build artifacts and is not source of truth.
@@ -43,5 +45,7 @@ The repo is in an architecture-first phase:
 
 - The firmware tree has been shaped to match the intended host/module split.
 - Architectural support docs are being written before major implementation work.
+- The ESP-IDF firmware now builds its protocol transport sources from
+  `external/dek-protocol` instead of duplicating them inside the host tree.
 - `firmware/main.c` is still a throwaway test entrypoint and should not be used
   as the long-term structure reference.

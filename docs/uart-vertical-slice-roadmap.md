@@ -140,18 +140,22 @@ It does not assume a polished UI or multi-module behavior yet.
 
 ### Files to Create or Update
 
-- Create `firmware/host/transport/dek_transport.h`
-  Purpose: define the host transport interface used by upper layers.
-- Create `firmware/host/transport/dek_transport.c`
-  Purpose: implement transport coordination, request flow, and state handling.
-- Create `firmware/host/transport/dek_packet.h`
-  Purpose: define packet structures, constants, and helpers.
-- Create `firmware/host/transport/dek_packet.c`
-  Purpose: implement packet encode, decode, and validation behavior.
-- Create `firmware/host/transport/dek_crc.h`
+- Create or adopt `external/dek-protocol/include/dek_transport.h`
+  Purpose: define the shared transport-facing protocol interface used by host
+  and module builds.
+- Create or adopt `external/dek-protocol/src/dek_transport.c`
+  Purpose: implement shared packet assembly and transport request helpers.
+- Create or adopt `external/dek-protocol/include/dek_packet.h`
+  Purpose: define shared packet structures, constants, and helpers.
+- Create or adopt `external/dek-protocol/src/dek_packet.c`
+  Purpose: implement shared packet encode, decode, and validation behavior.
+- Create or adopt `external/dek-protocol/include/dek_crc.h`
   Purpose: define CRC helpers used by the packet layer.
-- Create `firmware/host/transport/dek_crc.c`
-  Purpose: implement CRC16-CCITT support for DeK packets.
+- Create or adopt `external/dek-protocol/src/dek_crc.c`
+  Purpose: implement shared CRC16-CCITT support for DeK packets.
+- Keep `firmware/host/transport/README.md`
+  Purpose: reserve the host-only transport layer for SPI/ATTN/RESET integration
+  that sits above the shared protocol library.
 - Create `docs/sketches/enumeration-sequence.md`
   Purpose: record the one-module enumeration flow step by step.
 - Update `docs/module-interface.md`
@@ -315,12 +319,13 @@ you with at least these new project artifacts:
 - `docs/sketches/uart-slice-test-log.md`
 - `firmware/host/bootstrap.h`
 - `firmware/host/bootstrap.c`
-- `firmware/host/transport/dek_transport.h`
-- `firmware/host/transport/dek_transport.c`
-- `firmware/host/transport/dek_packet.h`
-- `firmware/host/transport/dek_packet.c`
-- `firmware/host/transport/dek_crc.h`
-- `firmware/host/transport/dek_crc.c`
+- `external/dek-protocol/include/dek_transport.h`
+- `external/dek-protocol/src/dek_transport.c`
+- `external/dek-protocol/include/dek_packet.h`
+- `external/dek-protocol/src/dek_packet.c`
+- `external/dek-protocol/include/dek_crc.h`
+- `external/dek-protocol/src/dek_crc.c`
+- `firmware/host/transport/README.md`
 - `firmware/host/service-api/service_api.h`
 - `firmware/host/service-api/service_api.c`
 - `firmware/host/module-manager/module_registry.h`

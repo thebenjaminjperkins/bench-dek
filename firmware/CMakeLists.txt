@@ -1,16 +1,18 @@
+set(DEK_PROTOCOL_DIR "${CMAKE_CURRENT_LIST_DIR}/../external/dek-protocol")
+
 idf_component_register(
     SRCS
         "main.c"
         "host/app_main.c"
-        "host/transport/dek_packet.c"
-        "host/transport/dek_transport.c"
-        "host/transport/dek_crc.c"
-        "host/transport/messages/dek_hello.c"
         "host/core/bootstrap.c"
         "host/applications/uart_smoke_app.c"
+        "${DEK_PROTOCOL_DIR}/src/dek_crc.c"
+        "${DEK_PROTOCOL_DIR}/src/dek_packet.c"
+        "${DEK_PROTOCOL_DIR}/src/dek_transport.c"
+        "${DEK_PROTOCOL_DIR}/src/message-types/dek_hello.c"
     INCLUDE_DIRS
         "."
         "host"
-        "host/transport"
+        "${DEK_PROTOCOL_DIR}/include"
     REQUIRES esp_driver_uart
 )
