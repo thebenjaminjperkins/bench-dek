@@ -5,3 +5,5 @@ capability routing, and arbitration logic.
 
 It is the host policy layer. It should not own byte framing or per-module wire
 details.
+
+The module manager knows which modules are associated with which services e.v.v.
