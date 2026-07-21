@@ -6,6 +6,7 @@ idf_component_register(
         "host/app_main.c"
         "host/core/bootstrap.c"
         "host/applications/uart_smoke_app.c"
+        "host/applications/spi_smoke_app.c"
         "${DEK_PROTOCOL_DIR}/src/dek_crc.c"
         "${DEK_PROTOCOL_DIR}/src/dek_packet.c"
         "${DEK_PROTOCOL_DIR}/src/dek_transport.c"
@@ -14,5 +15,7 @@ idf_component_register(
         "."
         "host"
         "${DEK_PROTOCOL_DIR}/include"
-    REQUIRES esp_driver_uart
+    REQUIRES 
+        esp_driver_uart
+        esp_driver_spi
 )
