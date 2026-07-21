@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
 #include "freertos/task.h"
 
 #include "driver/uart.h"
@@ -16,17 +17,23 @@
 #include "dek_transport.h"
 #include "message-types/dek_hello.h"
 
-#define DEK_UART_PORT UART_NUM_0
-#define DEK_UART_TX_PIN 43
-#define DEK_UART_RX_PIN 44
-#define DEK_UART_BAUD 115200
+#define DEK_LINK_UART_PORT UART_NUM_1
+#define DEK_LINK_UART_TX_PIN 17
+#define DEK_LINK_UART_RX_PIN 18
+#define DEK_LINK_UART_BAUD 115200
 
 #define DEK_UART_RX_BUFFER_SIZE 1024
 #define DEK_UART_TX_BUFFER_SIZE 1024
 #define DEK_PACKET_BUFFER_SIZE 256
 #define DEK_HELLO_RETRY_MS 2000
-#define DEK_COMMAND_DELAY_MS 500
 #define DEK_STATUS_INTERVAL_MS 2000
+#define DEK_CONSOLE_LINE_MAX 128
+#define DEK_CONSOLE_QUEUE_DEPTH 4
+
+typedef struct
+{
+    char text[DEK_CONSOLE_LINE_MAX];
+} dek_console_line_t;
 
 typedef struct
 {
@@ -57,19 +64,74 @@ typedef struct
     dek_packet_stream_t rx_stream;
 
     bool hello_ack_received;
-    bool command_sent;
-    bool response_received;
+    bool console_ready_announced;
 
     uint32_t packets_received;
     uint32_t invalid_packets;
     uint32_t buffer_overflows;
     uint32_t bytes_received;
     uint32_t bytes_sent;
+    uint32_t commands_sent;
+    uint32_t responses_received;
 
     TickType_t last_hello_tick;
     TickType_t hello_ack_tick;
     TickType_t last_status_tick;
+
+    QueueHandle_t console_line_queue;
 } dek_host_uart_state_t;
+
+static void trim_trailing_newlines(char *text)
+{
+    size_t length;
+
+    if (text == NULL)
+    {
+        return;
+    }
+
+    length = strlen(text);
+
+    while (length > 0u &&
+           (text[length - 1u] == '\n' || text[length - 1u] == '\r'))
+    {
+        text[length - 1u] = '\0';
+        length--;
+    }
+}
+
+static void console_input_task(void *arg)
+{
+    QueueHandle_t queue = (QueueHandle_t)arg;
+
+    while (1)
+    {
+        dek_console_line_t line = { 0 };
+
+        if (fgets(line.text, sizeof(line.text), stdin) == NULL)
+        {
+            vTaskDelay(pdMS_TO_TICKS(20));
+            continue;
+        }
+
+        trim_trailing_newlines(line.text);
+
+        if (line.text[0] == '\0')
+        {
+            continue;
+        }
+
+        if (queue == NULL)
+        {
+            continue;
+        }
+
+        if (xQueueSend(queue, &line, 0) != pdTRUE)
+        {
+            printf("Console input queue full; dropping line\n");
+        }
+    }
+}
 
 static void dek_packet_stream_reset(dek_packet_stream_t *stream)
 {
@@ -85,7 +147,7 @@ static void dek_packet_stream_reset(dek_packet_stream_t *stream)
 static void uart_link_init(void)
 {
     const uart_config_t config = {
-        .baud_rate = DEK_UART_BAUD,
+        .baud_rate = DEK_LINK_UART_BAUD,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -94,21 +156,21 @@ static void uart_link_init(void)
     };
 
     ESP_ERROR_CHECK(uart_driver_install(
-        DEK_UART_PORT,
+        DEK_LINK_UART_PORT,
         DEK_UART_RX_BUFFER_SIZE,
         DEK_UART_TX_BUFFER_SIZE,
         0,
         NULL,
         0));
 
-    ESP_ERROR_CHECK(uart_param_config(DEK_UART_PORT, &config));
+    ESP_ERROR_CHECK(uart_param_config(DEK_LINK_UART_PORT, &config));
     ESP_ERROR_CHECK(uart_set_pin(
-        DEK_UART_PORT,
-        DEK_UART_TX_PIN,
-        DEK_UART_RX_PIN,
+        DEK_LINK_UART_PORT,
+        DEK_LINK_UART_TX_PIN,
+        DEK_LINK_UART_RX_PIN,
         UART_PIN_NO_CHANGE,
         UART_PIN_NO_CHANGE));
-    ESP_ERROR_CHECK(uart_flush_input(DEK_UART_PORT));
+    ESP_ERROR_CHECK(uart_flush_input(DEK_LINK_UART_PORT));
 }
 
 static bool uart_send_packet(
@@ -125,7 +187,7 @@ static bool uart_send_packet(
     }
 
     written = uart_write_bytes(
-        DEK_UART_PORT,
+        DEK_LINK_UART_PORT,
         (const char *)buffer,
         length);
 
@@ -196,8 +258,13 @@ static bool send_command_packet(
         return false;
     }
 
-    state->command_sent = uart_send_packet(state, tx_buffer, encoded_length, "COMMAND");
-    return state->command_sent;
+    if (!uart_send_packet(state, tx_buffer, encoded_length, "COMMAND"))
+    {
+        return false;
+    }
+
+    state->commands_sent++;
+    return true;
 }
 
 static bool decode_hello_ack(
@@ -281,7 +348,7 @@ static void handle_packet(
             break;
 
         case DEK_MSG_RESPONSE:
-            state->response_received = true;
+            state->responses_received++;
             printf("RESPONSE payload ");
             print_ascii_payload(packet->payload, packet->header.payload_length);
             printf("\n");
@@ -373,7 +440,7 @@ static void process_uart_rx(dek_host_uart_state_t *state)
     int bytes_read;
 
     bytes_read = uart_read_bytes(
-        DEK_UART_PORT,
+        DEK_LINK_UART_PORT,
         rx_buffer,
         sizeof(rx_buffer),
         pdMS_TO_TICKS(20));
@@ -407,25 +474,32 @@ static void process_uart_rx(dek_host_uart_state_t *state)
     }
 }
 
-static void maybe_send_follow_up(dek_host_uart_state_t *state)
+static void maybe_send_console_command(dek_host_uart_state_t *state)
 {
-    static const char k_message[] = "UART bring-up message from ESP host";
-    TickType_t now = xTaskGetTickCount();
+    dek_console_line_t line;
 
     if (!state->hello_ack_received)
     {
-        if ((now - state->last_hello_tick) >= pdMS_TO_TICKS(DEK_HELLO_RETRY_MS))
-        {
-            (void)send_hello_packet(state);
-        }
-
         return;
     }
 
-    if (!state->command_sent &&
-        (now - state->hello_ack_tick) >= pdMS_TO_TICKS(DEK_COMMAND_DELAY_MS))
+    if (!state->console_ready_announced)
     {
-        (void)send_command_packet(state, k_message);
+        state->console_ready_announced = true;
+        printf("Type a line in the serial monitor and press Enter to send it to the module.\n");
+    }
+
+    if (state->console_line_queue == NULL)
+    {
+        return;
+    }
+
+    while (xQueueReceive(state->console_line_queue, &line, 0) == pdTRUE)
+    {
+        printf("Sending typed line ");
+        print_ascii_payload((const uint8_t *)line.text, (uint16_t)strlen(line.text));
+        printf("\n");
+        (void)send_command_packet(state, line.text);
     }
 }
 
@@ -442,15 +516,15 @@ static void maybe_report_status(dek_host_uart_state_t *state)
 
     printf(
         "[host-uart] bytes_tx=%lu bytes_rx=%lu packets_rx=%lu invalid=%lu overflow=%lu "
-        "hello_ack=%u command_sent=%u response=%u\n",
+        "hello_ack=%u commands=%lu responses=%lu\n",
         (unsigned long)state->bytes_sent,
         (unsigned long)state->bytes_received,
         (unsigned long)state->packets_received,
         (unsigned long)state->invalid_packets,
         (unsigned long)state->buffer_overflows,
         state->hello_ack_received ? 1u : 0u,
-        state->command_sent ? 1u : 0u,
-        state->response_received ? 1u : 0u);
+        (unsigned long)state->commands_sent,
+        (unsigned long)state->responses_received);
 }
 
 void uart_smoke_app_run(void)
@@ -460,22 +534,50 @@ void uart_smoke_app_run(void)
     memset(&state, 0, sizeof(state));
     dek_transport_init(&state.transport);
     dek_packet_stream_reset(&state.rx_stream);
+    state.console_line_queue = xQueueCreate(
+        DEK_CONSOLE_QUEUE_DEPTH,
+        sizeof(dek_console_line_t));
 
     uart_link_init();
 
     printf(
-        "UART smoke test starting on Tuesday, July 21, 2026 using UART%u TX=%d RX=%d baud=%d\n",
-        (unsigned int)DEK_UART_PORT,
-        DEK_UART_TX_PIN,
-        DEK_UART_RX_PIN,
-        DEK_UART_BAUD);
+        "UART smoke test starting on Tuesday, July 21, 2026 using link UART%u TX=%d RX=%d baud=%d; console stays on COM8\n",
+        (unsigned int)DEK_LINK_UART_PORT,
+        DEK_LINK_UART_TX_PIN,
+        DEK_LINK_UART_RX_PIN,
+        DEK_LINK_UART_BAUD);
+
+    if (state.console_line_queue == NULL)
+    {
+        printf("Failed to create console input queue\n");
+    }
+    else
+    {
+        BaseType_t task_ok = xTaskCreate(
+            console_input_task,
+            "dek_console_in",
+            4096,
+            state.console_line_queue,
+            5,
+            NULL);
+
+        if (task_ok != pdPASS)
+        {
+            printf("Failed to start console input task\n");
+        }
+    }
 
     (void)send_hello_packet(&state);
 
     while (1)
     {
         process_uart_rx(&state);
-        maybe_send_follow_up(&state);
+        if (!state.hello_ack_received &&
+            (xTaskGetTickCount() - state.last_hello_tick) >= pdMS_TO_TICKS(DEK_HELLO_RETRY_MS))
+        {
+            (void)send_hello_packet(&state);
+        }
+        maybe_send_console_command(&state);
         maybe_report_status(&state);
         vTaskDelay(pdMS_TO_TICKS(20));
     }
