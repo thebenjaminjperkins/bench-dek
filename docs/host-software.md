@@ -29,6 +29,16 @@ streams, issue commands, or request resource reservations through the service
 API. When activation is required, the service API may return a handle to a runtime
 capability service instance rather than exposing a module directly.
 
+### Bringup
+
+Bringup code is development-only runtime code used for early hardware
+validation, protocol smoke tests, and temporary diagnostic flows while the
+production layering is still being built out.
+
+It may talk to transport or protocol code more directly than production
+applications do, but it should remain isolated from the long-term
+`applications/` layer so the architecture stays readable.
+
 ### Service API
 
 The service API is the stable host-facing contract for applications. It should
@@ -82,11 +92,13 @@ The intended host bootstrap order is:
 
 - `firmware/host/app_main.c`
 - `firmware/host/core/`
+- `firmware/host/bringup/`
 - `firmware/host/ui/`
 - `firmware/host/applications/`
 - `firmware/host/service-api/`
 - `firmware/host/module-manager/`
 - `firmware/host/module-drivers/`
 - `firmware/host/transport/`
+- `firmware/host/tests/`
 
 This keeps implementation structure aligned with architectural ownership.

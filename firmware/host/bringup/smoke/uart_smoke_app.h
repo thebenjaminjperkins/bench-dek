@@ -1,4 +1,3 @@
-
 #ifndef UART_SMOKE_APP_H
 #define UART_SMOKE_APP_H
 

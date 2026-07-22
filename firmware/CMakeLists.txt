@@ -1,30 +1,27 @@
-set(DEK_PROTOCOL_DIR "${CMAKE_CURRENT_LIST_DIR}/../external/dek-protocol")
+set(DEK_PROTOCOL_DIR "${CMAKE_CURRENT_LIST_DIR}/../external/DeK-Protocol")
+set(DEK_PROTOCOL_ROOT "${DEK_PROTOCOL_DIR}")
+
+include("${DEK_PROTOCOL_ROOT}/cmake/dek_protocol_sources.cmake")
 
 idf_component_register(
     SRCS
         "main.c"
         "host/app_main.c"
         "host/core/bootstrap.c"
-        "host/applications/uart_smoke_app.c"
-        "host/applications/spi_smoke_app.c"
+        "host/bringup/dev_runtime.c"
+        "host/bringup/smoke/uart_smoke_app.c"
+        "host/bringup/smoke/spi_smoke_app.c"
+        "host/tests/module_service_unit_test.c"
         "host/service-api/service_api.c"
         "host/service-api/services/service-gpio/service-gpio.c"
         "host/module-manager/module_registry.c"
         "host/module-manager/service_instance.c"
-        "${DEK_PROTOCOL_DIR}/src/dek_crc.c"
-        "${DEK_PROTOCOL_DIR}/src/dek_packet.c"
-        "${DEK_PROTOCOL_DIR}/src/dek_transport.c"
-        "${DEK_PROTOCOL_DIR}/src/message-types/dek_hello.c"
-        "${DEK_PROTOCOL_DIR}/src/message-types/dek_descriptor.c"
-        "${DEK_PROTOCOL_DIR}/src/message-types/dek_capabilities.c"
-        "${DEK_PROTOCOL_DIR}/src/message-types/dek_open_capability.c"
-        "${DEK_PROTOCOL_DIR}/src/capabilities/dek_uart_stream.c"
-        "${DEK_PROTOCOL_DIR}/src/capabilities/dek_gpio_digital.c"
+        ${DEK_PROTOCOL_SOURCES}
     INCLUDE_DIRS
         "."
         "host"
         "host/service-api"
-        "${DEK_PROTOCOL_DIR}/include"
+        "${DEK_PROTOCOL_INCLUDE_DIR}"
     REQUIRES 
         esp_driver_uart
         esp_driver_spi

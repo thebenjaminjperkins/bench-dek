@@ -7,8 +7,10 @@ the current temporary test program.
 
 - `main.c` is the thin ESP-IDF entrypoint that hands off to host startup.
 - `host/` contains host-side production architecture layers.
+- `host/bringup/` contains development-only boot flows, smoke tests, and
+  temporary validation harnesses.
 - `modules/` contains module-side source and protocol-facing module logic.
-- `../external/dek-protocol/` contains the shared packet, CRC, and transport
+- `../external/DeK-Protocol/` contains the shared packet, CRC, and transport
   sources consumed by the firmware build.
 
 Host-specific runtime code should live under `host/` rather than accumulating in

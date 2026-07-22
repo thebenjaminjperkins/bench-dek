@@ -9,9 +9,9 @@
 #include "driver/spi_master.h"
 #include "esp_attr.h"
 
-#include "dek_transport.h"
-#include "dek_packet.h"
-#include "message-types/dek_hello.h"
+#include "dek_protocol/dek_transport.h"
+#include "dek_protocol/dek_packet.h"
+#include "dek_protocol/message-types/dek_hello.h"
 
 #define PIN_NUM_CS   10
 #define PIN_NUM_MOSI 11

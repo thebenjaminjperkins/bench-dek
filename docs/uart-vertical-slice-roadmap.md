@@ -140,18 +140,18 @@ It does not assume a polished UI or multi-module behavior yet.
 
 ### Files to Create or Update
 
-- Create or adopt `external/dek-protocol/include/dek_transport.h`
+- Create or adopt `external/DeK-Protocol/include/dek_transport.h`
   Purpose: define the shared transport-facing protocol interface used by host
   and module builds.
-- Create or adopt `external/dek-protocol/src/dek_transport.c`
+- Create or adopt `external/DeK-Protocol/src/dek_transport.c`
   Purpose: implement shared packet assembly and transport request helpers.
-- Create or adopt `external/dek-protocol/include/dek_packet.h`
+- Create or adopt `external/DeK-Protocol/include/dek_packet.h`
   Purpose: define shared packet structures, constants, and helpers.
-- Create or adopt `external/dek-protocol/src/dek_packet.c`
+- Create or adopt `external/DeK-Protocol/src/dek_packet.c`
   Purpose: implement shared packet encode, decode, and validation behavior.
-- Create or adopt `external/dek-protocol/include/dek_crc.h`
+- Create or adopt `external/DeK-Protocol/include/dek_crc.h`
   Purpose: define CRC helpers used by the packet layer.
-- Create or adopt `external/dek-protocol/src/dek_crc.c`
+- Create or adopt `external/DeK-Protocol/src/dek_crc.c`
   Purpose: implement shared CRC16-CCITT support for DeK packets.
 - Keep `firmware/host/transport/README.md`
   Purpose: reserve the host-only transport layer for SPI/ATTN/RESET integration
@@ -269,9 +269,9 @@ It does not assume a polished UI or multi-module behavior yet.
 
 ### Files to Create or Update
 
-- Create `firmware/host/applications/uart_smoke_app.c`
+- Create `firmware/host/bringup/smoke/uart_smoke_app.c`
   Purpose: provide a minimal consumer for the `uart.stream` capability.
-- Create `firmware/host/applications/uart_smoke_app.h`
+- Create `firmware/host/bringup/smoke/uart_smoke_app.h`
   Purpose: define the entrypoint for the temporary validation app or harness.
 - Create `docs/sketches/uart-bringup-checklist.md`
   Purpose: define the exact validation steps to run.
@@ -319,12 +319,12 @@ you with at least these new project artifacts:
 - `docs/sketches/uart-slice-test-log.md`
 - `firmware/host/bootstrap.h`
 - `firmware/host/bootstrap.c`
-- `external/dek-protocol/include/dek_transport.h`
-- `external/dek-protocol/src/dek_transport.c`
-- `external/dek-protocol/include/dek_packet.h`
-- `external/dek-protocol/src/dek_packet.c`
-- `external/dek-protocol/include/dek_crc.h`
-- `external/dek-protocol/src/dek_crc.c`
+- `external/DeK-Protocol/include/dek_transport.h`
+- `external/DeK-Protocol/src/dek_transport.c`
+- `external/DeK-Protocol/include/dek_packet.h`
+- `external/DeK-Protocol/src/dek_packet.c`
+- `external/DeK-Protocol/include/dek_crc.h`
+- `external/DeK-Protocol/src/dek_crc.c`
 - `firmware/host/transport/README.md`
 - `firmware/host/service-api/service_api.h`
 - `firmware/host/service-api/service_api.c`
@@ -334,8 +334,8 @@ you with at least these new project artifacts:
 - `firmware/host/module-manager/service_instance.c`
 - `firmware/host/module-drivers/uart_reference_driver.h`
 - `firmware/host/module-drivers/uart_reference_driver.c`
-- `firmware/host/applications/uart_smoke_app.h`
-- `firmware/host/applications/uart_smoke_app.c`
+- `firmware/host/bringup/smoke/uart_smoke_app.h`
+- `firmware/host/bringup/smoke/uart_smoke_app.c`
 - `firmware/modules/reference-uart/README.md`
 - `firmware/modules/reference-uart/module_main.c`
 - `firmware/modules/reference-uart/descriptor.c`

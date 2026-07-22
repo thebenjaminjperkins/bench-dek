@@ -1,8 +1,8 @@
 #include "bootstrap.h"
 
-#include "applications/uart_smoke_app.h"
+#include "bringup/dev_runtime.h"
 
 void dek_bootstrap(void)
 {
-    uart_smoke_app_run();
+    dek_host_bringup_run();
 }

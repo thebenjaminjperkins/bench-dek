@@ -13,9 +13,9 @@
 #include "esp_check.h"
 
 #include "dek_message.h"
-#include "dek_packet.h"
-#include "dek_transport.h"
-#include "message-types/dek_hello.h"
+#include "dek_protocol/dek_packet.h"
+#include "dek_protocol/dek_transport.h"
+#include "dek_protocol/message-types/dek_hello.h"
 
 #define DEK_LINK_UART_PORT UART_NUM_1
 #define DEK_LINK_UART_TX_PIN 17
