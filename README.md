@@ -5,18 +5,21 @@ modules. The host provides the user experience, application runtime, capability
 routing, and system policy. Modules provide hardware-backed services such as
 UART, GPIO, protocol analysis, and other instrumentation features.
 
-This repository is currently organized around the target architecture rather than
-around a large implementation surface. The firmware entrypoint remains a test
-program for now; the surrounding structure reflects the intended production
-design.
+The repository is transitioning from architecture-first scaffolding to a
+working, host-side GPIO vertical slice. The ESP-IDF entrypoint is now a thin
+handoff into the host bootstrap. The current slice uses a simulated reference
+module so the host stack can be exercised before physical SPI hardware and
+separate module firmware are ready.
 
 ## Repository Layout
 
 - `docs/` contains the system vision, architecture, interface contracts, and
   design decisions.
 - `firmware/` contains firmware source organized by architectural layer.
-- `external/DeK-Protocol/` contains the shared transport and packet library
-  used by the host and module implementations.
+- `firmware/host/tests/fixtures/` contains host-local simulated modules used
+  only for tests and bringup.
+- `external/DeK-Protocol/` is the shared, platform-independent packet,
+  transport, control-plane, and capability-contract library.
 - `components/` is reserved for reusable ESP-IDF components shared across the
   firmware.
 - `build/` contains generated build artifacts and is not source of truth.
@@ -41,13 +44,18 @@ For the current architecture, start with:
 
 ## Current Status
 
-The repo is in an architecture-first phase:
+The current implementation proves the host-side layers with `gpio.digital`:
 
-- The firmware tree has been shaped to match the intended host/module split.
-- Development-only boot and smoke-test flows are isolated under
-  `firmware/host/bringup/` so production layers stay easier to reason about.
-- Architectural support docs are being written before major implementation work.
-- The ESP-IDF firmware now builds its protocol transport sources from
-  `external/DeK-Protocol` instead of duplicating them inside the host tree.
-- `firmware/main.c` is still a throwaway test entrypoint and should not be used
-  as the long-term structure reference.
+- `main.c` hands off to `host/app_main.c` and `host/core/bootstrap.c`.
+- The bringup runtime runs host unit tests and a GPIO vertical-slice harness.
+- The harness performs HELLO, descriptor and capability discovery, service
+  open, GPIO mode/write/read commands, and service close against a simulated
+  reference module.
+- The host uses the shared sources in `external/DeK-Protocol`; it does not
+  duplicate packet or control-plane definitions.
+- The physical SPI adapter, a deployable reference-module firmware project,
+  and real-hardware validation are still outstanding.
+
+See the [GPIO vertical-slice roadmap](docs/gpio-vertical-slice-roadmap.md) for
+the continuation plan. The existing UART documents remain the design target for
+the next capability, not a description of the current executable slice.

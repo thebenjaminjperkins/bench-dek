@@ -6,10 +6,16 @@
 #include <string.h>
 
 #include "capabilities/dek_capability_ids.h"
+#include "capabilities/dek_gpio_digital.h"
+#include "dek_message.h"
+#include "module-drivers/gpio_remote_provider.h"
 #include "message-types/dek_descriptor.h"
 #include "module-manager/module_registry.h"
 #include "module-manager/service_instance.h"
 #include "service-api/service_api.h"
+#include "service-api/services/service-gpio/service-gpio.h"
+#include "tests/fixtures/reference-gpio/reference_gpio_module.h"
+#include "transport/host_transport_adapter.h"
 
 static void print_test_banner(const char *test_name)
 {
@@ -272,7 +278,177 @@ static bool module_service_unit_test_run_impl(void)
     return true;
 }
 
+static bool gpio_service_transport_slice_test_run_impl(void)
+{
+    static const char *test_name = "gpio_service_transport_slice_test";
+    reference_gpio_module_t module;
+    host_transport_adapter_t transport;
+    gpio_remote_provider_driver_t provider_driver;
+    module_registry_t registry;
+    service_instance_registry_t instances;
+    service_api_t api;
+    host_transport_hello_result_t hello_result;
+    capability_request_t request;
+    service_handle_t handle = { 0 };
+    uint8_t value = 0u;
+    bool handle_open = false;
+
+    print_test_banner(test_name);
+
+    if (!require_true(
+            test_name,
+            "initialize reference module, transport, registries, and service api",
+            reference_gpio_module_init(&module) &&
+                host_transport_adapter_init(
+                    &transport,
+                    reference_gpio_module_exchange,
+                    &module) &&
+                gpio_remote_provider_driver_init(&provider_driver, &transport) &&
+                module_registry_init(&registry) &&
+                service_instance_registry_init(&instances) &&
+                service_api_init(&api, &registry, &instances),
+            "vertical slice dependencies should initialize"))
+    {
+        return false;
+    }
+
+    if (!require_true(
+            test_name,
+            "perform hello handshake",
+            host_transport_adapter_send_hello(&transport, &hello_result) &&
+                hello_result.selected_protocol_version == DEK_PROTOCOL_VERSION,
+            "hello handshake should succeed"))
+    {
+        return false;
+    }
+
+    if (!require_true(
+            test_name,
+            "discover gpio provider from reference module",
+            gpio_remote_provider_driver_discover_and_register(
+                &provider_driver,
+                &registry,
+                NULL),
+            "remote gpio provider should register through discovery"))
+    {
+        return false;
+    }
+
+    memset(&request, 0, sizeof(request));
+    request.capability_id = DEK_CAPABILITY_ID_GPIO_DIGITAL;
+    request.capability_version = DEK_CAPABILITY_VERSION_GPIO_DIGITAL;
+    request.preferred_module_id =
+        gpio_remote_provider_driver_module_id(&provider_driver);
+    request.lease_owner = 0xABCDEF01u;
+
+    if (!require_true(
+            test_name,
+            "open gpio service handle",
+            service_api_open(&api, &request, &handle),
+            "service_api_open should succeed for gpio slice"))
+    {
+        return false;
+    }
+
+    handle_open = true;
+
+    if (!require_true(
+            test_name,
+            "set pin 2 output mode over transport",
+            gpio_service_set_mode(
+                &handle,
+                2u,
+                DEK_GPIO_DIGITAL_MODE_OUTPUT),
+            "gpio set_mode should succeed"))
+    {
+        goto cleanup;
+    }
+
+    if (!require_true(
+            test_name,
+            "write pin 2 high over transport",
+            gpio_service_write(
+                &handle,
+                2u,
+                DEK_GPIO_DIGITAL_LEVEL_HIGH),
+            "gpio write high should succeed"))
+    {
+        goto cleanup;
+    }
+
+    if (!require_true(
+            test_name,
+            "read pin 2 high over transport",
+            gpio_service_read(&handle, 2u, &value) &&
+                value == (uint8_t)DEK_GPIO_DIGITAL_LEVEL_HIGH,
+            "gpio read should report high"))
+    {
+        goto cleanup;
+    }
+
+    if (!require_true(
+            test_name,
+            "write pin 2 low over transport",
+            gpio_service_write(
+                &handle,
+                2u,
+                DEK_GPIO_DIGITAL_LEVEL_LOW),
+            "gpio write low should succeed"))
+    {
+        goto cleanup;
+    }
+
+    if (!require_true(
+            test_name,
+            "read pin 2 low over transport",
+            gpio_service_read(&handle, 2u, &value) &&
+                value == (uint8_t)DEK_GPIO_DIGITAL_LEVEL_LOW,
+            "gpio read should report low"))
+    {
+        goto cleanup;
+    }
+
+    if (!require_true(
+            test_name,
+            "close gpio service handle",
+            service_api_close(&api, &handle),
+            "service_api_close should succeed for gpio slice"))
+    {
+        return false;
+    }
+
+    handle_open = false;
+
+    if (!require_true(
+            test_name,
+            "verify gpio handle cleared after close",
+            !service_handle_is_bound(&handle),
+            "closed gpio handle should no longer be bound"))
+    {
+        return false;
+    }
+
+    printf("  [%s] PASS\n", test_name);
+    return true;
+
+cleanup:
+    if (handle_open)
+    {
+        (void)service_api_close(&api, &handle);
+    }
+
+    return false;
+}
+
 void module_service_unit_test_run(void)
 {
-    (void)module_service_unit_test_run_impl();
+    bool overall_ok = true;
+
+    overall_ok = module_service_unit_test_run_impl() && overall_ok;
+    overall_ok = gpio_service_transport_slice_test_run_impl() && overall_ok;
+
+    if (!overall_ok)
+    {
+        printf("\n[TEST] overall result: FAIL\n");
+    }
 }

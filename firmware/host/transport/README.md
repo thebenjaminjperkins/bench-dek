@@ -1,9 +1,15 @@
 # Transport Layer
 
-This directory is reserved for host-side link code such as UART, SPI, USB, or
-other physical transport implementations.
+This directory contains host-side adapters above the shared DeK-Protocol
+library, and will contain link implementations such as SPI, UART, USB, or
+other physical transports.
 
-Transport code owns:
+`host_transport_adapter` currently converts host requests into shared DeK
+control-plane and command packets, but delegates byte exchange to an injected
+callback. The GPIO slice provides that callback with an in-process module
+fixture. It is not yet a physical SPI implementation.
+
+Physical transport code owns:
 
 - framing at the byte-stream boundary
 - link I/O

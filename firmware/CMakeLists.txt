@@ -8,14 +8,18 @@ idf_component_register(
         "main.c"
         "host/app_main.c"
         "host/core/bootstrap.c"
+        "host/bringup/gpio_vertical_slice_app.c"
         "host/bringup/dev_runtime.c"
         "host/bringup/smoke/uart_smoke_app.c"
         "host/bringup/smoke/spi_smoke_app.c"
+        "host/module-drivers/gpio_remote_provider.c"
         "host/tests/module_service_unit_test.c"
         "host/service-api/service_api.c"
         "host/service-api/services/service-gpio/service-gpio.c"
         "host/module-manager/module_registry.c"
         "host/module-manager/service_instance.c"
+        "host/transport/host_transport_adapter.c"
+        "host/tests/fixtures/reference-gpio/reference_gpio_module.c"
         ${DEK_PROTOCOL_SOURCES}
     INCLUDE_DIRS
         "."
